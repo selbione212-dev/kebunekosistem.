@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Misi Kebun Ajaib - Petualangan Ekosistem</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&display=swap');
+        
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background-color: #dcfce7; /* green-100 */
+            touch-action: manipulation;
+            overflow-x: hidden;
+        }
+
+        #game-canvas {
+            image-rendering: crisp-edges;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            background: linear-gradient(to bottom, #87CEEB 0%, #E0F6FF 100%);
+        }
+
+        .flower-bloom {
+            animation: bloom 1s ease-out forwards;
+            display: inline-block;
+        }
+
+        @keyframes bloom {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .modal-enter {
+            animation: slideIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        @keyframes slideIn {
+            0% { transform: translate(-50%, -60%) scale(0.8); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        .btn-game {
+            transition: all 0.1s;
+        }
+        .btn-game:active {
+            transform: scale(0.95);
+        }
+
+        /* Prevent text selection during gameplay */
+        .no-select {
+            user-select: none;
+            -webkit-user-select: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center justify-center p-2 sm:p-4 text-gray-800">
+
+    <!-- Container Utama -->
+    <div class="w-full max-w-4xl relative bg-white rounded-3xl shadow-2xl overflow-hidden border-4 border-green-400">
+        
+        <!-- Header / Progress Bar -->
+        <div class="bg-green-500 text-white p-3 flex flex-col sm:flex-row justify-between items-center z-10 relative shadow-md">
+            <h1 class="text-xl sm:text-2xl font-bold mb-2 sm:mb-0">🌱 Kebun Ajaib</h1>
+            <div class="flex items-center space-x-4">
+                <div class="font-semibold bg-green-600 px-3 py-1 rounded-full flex items-center shadow-inner">
+                    <span class="text-yellow-300 mr-1">💰</span> Poin: <span id="score-display" class="ml-1">0</span>
+                </div>
+                <div class="font-semibold bg-green-600 px-3 py-1 rounded-full shadow-inner">
+                    Misi: <span id="level-display">1</span>/10
+                </div>
+            </div>
+        </div>
+
+        <!-- Kebun Progress (Visual Misi) -->
+        <div class="bg-green-100 p-2 sm:p-3 flex justify-around items-center border-b-2 border-green-200" id="garden-progress">
+            <!-- Akan diisi oleh JS -->
+        </div>
+
+        <!-- Area Game Canvas -->
+        <div id="game-container" class="relative w-full aspect-[2/1] bg-blue-100">
+            <canvas id="game-canvas" class="w-full h-full block rounded-b-lg sm:rounded-none"></canvas>
+            
+            <!-- Layar Mulai -->
+            <div id="start-screen" class="absolute inset-0 bg-black/60 flex flex-col items-center justify-center text-center p-6 z-20 backdrop-blur-sm">
+                <div class="bg-white rounded-2xl p-6 sm:p-8 max-w-lg shadow-2xl border-4 border-green-400">
+                    <h2 class="text-3xl font-bold text-green-600 mb-4">Misi Kebun Ajaib! 🌻</h2>
+                    <p class="text-lg text-gray-600 mb-4 leading-relaxed">
+                        Halo Pahlawan Cilik! Kebun ajaib ini mulai layu. Kamu harus menjalankan petualangan sebagai berbagai hewan, mengumpulkan makanan mereka, dan memecahkan misteri ekosistem!
+                    </p>
+                    <p class="text-md text-gray-600 mb-6 font-semibold bg-blue-50 p-3 rounded-lg border border-blue-200">
+                        Kumpulkan 5 makanan dan sundul <span class="bg-yellow-400 text-white px-1 rounded shadow">Bata Poin 💰</span>. 
+                        Setelah kenyang, sundul <span class="bg-purple-500 text-white px-1 rounded shadow">Bata Tantangan ❓</span> untuk menjawab pertanyaan!
+                    </p>
+                    <button onclick="startGame()" class="btn-game bg-green-500 hover:bg-green-600 text-white text-xl font-bold py-3 px-8 rounded-full shadow-[0_5px_0_#166534] hover:shadow-[0_2px_0_#166534] hover:translate-y-1 w-full sm:w-auto">
+                        Mulai Petualangan! 🚀
+                    </button>
+                </div>
+            </div>
+
+            <!-- Kontrol Sentuh (Mobile) -->
+            <div class="absolute bottom-4 left-0 w-full px-4 flex justify-between items-center z-10 sm:hidden no-select">
+                <div class="flex space-x-2">
+                    <button id="btn-left" class="bg-white/80 active:bg-gray-200 border-2 border-gray-400 text-gray-700 w-14 h-14 rounded-full flex justify-center items-center text-2xl font-bold shadow-lg backdrop-blur">
+                        &larr;
+                    </button>
+                    <button id="btn-right" class="bg-white/80 active:bg-gray-200 border-2 border-gray-400 text-gray-700 w-14 h-14 rounded-full flex justify-center items-center text-2xl font-bold shadow-lg backdrop-blur">
+                        &rarr;
+                    </button>
+                </div>
+                <button id="btn-jump" class="bg-blue-500/80 active:bg-blue-600 border-2 border-blue-700 text-white w-14 h-14 rounded-full flex justify-center items-center text-2xl font-bold shadow-lg backdrop-blur">
+                    &uarr;
+                </button>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Modal Pertanyaan -->
+    <div id="question-modal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-lg bg-white rounded-3xl p-6 z-50 hidden shadow-2xl border-4 border-purple-500 text-center">
+        <div class="bg-purple-100 text-purple-700 font-bold px-4 py-1 rounded-full inline-block mb-3">Tantangan Ekosistem!</div>
+        <h3 id="question-text" class="text-xl sm:text-2xl font-semibold mb-6 text-gray-800 leading-snug"></h3>
+        <div id="options-container" class="space-y-3">
+            <!-- Options akan dimuat di sini -->
+        </div>
+    </div>
+
+    <!-- Modal Feedback (Benar/Salah) -->
+    <div id="feedback-modal" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[90%] max-w-sm bg-white rounded-3xl p-6 z-50 hidden shadow-2xl border-4 text-center">
+        <div id="feedback-icon" class="text-6xl mb-2"></div>
+        <h3 id="feedback-title" class="text-2xl font-bold mb-2"></h3>
+        <p id="feedback-text" class="text-gray-600 mb-6"></p>
+        <button id="feedback-btn" class="btn-game text-white text-lg font-bold py-2 px-6 rounded-full shadow-[0_4px_0_rgba(0,0,0,0.2)] w-full"></button>
+    </div>
+
+    <!-- Modal Penutup (Tamat) -->
+    <div id="end-screen" class="fixed inset-0 bg-black/80 flex flex-col items-center justify-center text-center p-6 z-50 hidden backdrop-blur-md">
+        <div class="bg-white rounded-3xl p-8 max-w-2xl shadow-2xl border-4 border-yellow-400 relative overflow-hidden">
+            <div class="absolute -top-10 -left-10 text-6xl opacity-20">🌻</div>
+            <div class="absolute -bottom-10 -right-10 text-6xl opacity-20">🌺</div>
+            
+            <h2 class="text-4xl sm:text-5xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-yellow-500 mb-4">
+                Keajaiban Telah Kembali! ✨
+            </h2>
+            <div class="text-5xl mb-6">🪴➡️🌳🌺🌻🌼</div>
+            <p class="text-lg sm:text-xl text-gray-700 mb-6 leading-relaxed">
+                Luar biasa, Pahlawan Ekosistem! Berkat semangat pantang menyerah dan pengetahuanmu yang hebat, seluruh Kebun Ajaib kini mekar sempurna dengan warna-warni yang sangat indah. 
+            </p>
+            <p class="text-md text-gray-500 italic mb-8">
+                "Alam yang seimbang adalah keajaiban terbesar yang harus selalu kita jaga."
+            </p>
+            <button onclick="location.reload()" class="btn-game bg-yellow-400 hover:bg-yellow-500 text-yellow-900 text-xl font-bold py-3 px-8 rounded-full shadow-[0_5px_0_#a16207] hover:shadow-[0_2px_0_#a16207] hover:translate-y-1">
+                Mainkan Lagi 🔄
+            </button>
+        </div>
+    </div>
+
+    <!-- Overlay Background Hitam -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/50 z-40 hidden backdrop-blur-sm"></div>
+
+    <script>
+        // --- DATA GAME ---
+        const levels = [
+            {
+                animal: "🐰", food: "🥕", name: "Kelinci",
+                question: "Apa yang dimaksud dengan komponen abiotik dalam sebuah ekosistem?",
+                options: [
+                    "Benda tak hidup seperti air, tanah, dan cahaya matahari.",
+                    "Makhluk hidup seperti hewan dan manusia.",
+                    "Tumbuhan hijau yang melakukan fotosintesis."
+                ],
+                answer: 0,
+                hint: "Ingat, 'A' berarti tidak, 'Biotik' berarti hidup. Jadi ini tentang benda yang tidak hidup di alam."
+            },
+            {
+                animal: "🐛", food: "🍃", name: "Ulat",
+                question: "Sekumpulan ulat atau sekumpulan kambing di sebuah padang rumput disebut sebagai...",
+                options: [
+                    "Individu",
+                    "Populasi",
+                    "Komunitas"
+                ],
+                answer: 1,
+                hint: "Satu makhluk disebut individu, kalau kumpul sejenis dalam satu tempat disebut apa ya?"
+            },
+            {
+                animal: "🐱", food: "🐟", name: "Kucing",
+                question: "Hubungan antara lebah dan bunga merupakan contoh simbiosis mutualisme karena...",
+                options: [
+                    "Lebah diuntungkan, bunga dirugikan.",
+                    "Keduanya saling menguntungkan.",
+                    "Lebah tidak terpengaruh, bunga diuntungkan."
+                ],
+                answer: 1,
+                hint: "Kata kuncinya 'Mutual' yang artinya saling bekerja sama untuk kebaikan bersama!"
+            },
+            {
+                animal: "🦊", food: "🐁", name: "Musang",
+                question: "Musang yang mengejar dan memakan tikus di kebun adalah contoh interaksi yang disebut...",
+                options: [
+                    "Kompetisi",
+                    "Simbiosis Komensalisme",
+                    "Predasi"
+                ],
+                answer: 2,
+                hint: "Interaksi di mana ada pihak yang menjadi predator (pemangsa) dan mangsa disebut apa?"
+            },
+            {
+                animal: "🐸", food: "🪰", name: "Katak",
+                question: "Dalam rantai makanan, tumbuhan padi yang bisa membuat makanannya sendiri menggunakan sinar matahari berperan sebagai...",
+                options: [
+                    "Produsen",
+                    "Konsumen tingkat 1",
+                    "Dekomposer"
+                ],
+                answer: 0,
+                hint: "Mereka yang memproduksi atau menghasilkan makanan sendiri disebut..."
+            },
+            {
+                animal: "🐦", food: "🪱", name: "Burung",
+                question: "Contoh simbiosis parasitisme (satu untung, satu rugi) di bawah ini adalah...",
+                options: [
+                    "Ikan badut yang bersembunyi di anemon laut.",
+                    "Kutu yang hidup dan menghisap darah di rambut manusia.",
+                    "Anggrek yang menempel di pohon mangga yang besar."
+                ],
+                answer: 1,
+                hint: "Cari contoh di mana salah satu merasa gatal, sakit, atau diambil nutrisinya secara paksa."
+            },
+            {
+                animal: "🐵", food: "🍌", name: "Monyet",
+                question: "Tanaman anggrek menempel pada pohon mangga untuk mendapat cahaya, tetapi pohon mangga tidak dirugikan dan tidak diuntungkan. Ini disebut simbiosis...",
+                options: [
+                    "Komensalisme",
+                    "Mutualisme",
+                    "Parasitisme"
+                ],
+                answer: 0,
+                hint: "Satu untung, yang satunya biasa-biasa saja (tidak untung/tidak rugi)."
+            },
+            {
+                animal: "🐝", food: "🌸", name: "Lebah",
+                question: "Jika dua ekor hewan bertarung untuk memperebutkan wilayah mencari makan, ini merupakan contoh dari interaksi...",
+                options: [
+                    "Predasi",
+                    "Kompetisi",
+                    "Simbiosis"
+                ],
+                answer: 1,
+                hint: "Pertarungan atau persaingan memperebutkan sesuatu disebut juga dengan..."
+            },
+            {
+                animal: "🐼", food: "🎋", name: "Panda",
+                question: "Kumpulan populasi bambu, panda, burung, dan serangga yang hidup bersama di suatu hutan disebut...",
+                options: [
+                    "Individu",
+                    "Komunitas",
+                    "Biosfer"
+                ],
+                answer: 1,
+                hint: "Kumpulan berbagai macam populasi yang hidup dalam satu wilayah disebut..."
+            },
+            {
+                animal: "🐿️", food: "🥜", name: "Tupai",
+                question: "Bakteri dan jamur dalam ekosistem bertugas menguraikan makhluk hidup yang sudah mati agar kembali menjadi nutrisi di tanah. Mereka disebut...",
+                options: [
+                    "Konsumen Puncak",
+                    "Produsen",
+                    "Dekomposer (Pengurai)"
+                ],
+                answer: 2,
+                hint: "Tugas mereka adalah mengurai sisa-sisa. Jadi nama lainnya pengurai atau..."
+            }
+        ];
+
+        // --- STATE GAME ---
+        let currentLevel = 0;
+        let score = 0;
+        let totalScore = 0;
+        let foodsCollected = 0;
+        let isGameRunning = false;
+        let animationId;
+        
+        // Element UI
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score-display');
+        const levelDisplay = document.getElementById('level-display');
+        const gardenProgress = document.getElementById('garden-progress');
+        const startScreen = document.getElementById('start-screen');
+        const questionModal = document.getElementById('question-modal');
+        const optionsContainer = document.getElementById('options-container');
+        const modalOverlay = document.getElementById('modal-overlay');
+        const feedbackModal = document.getElementById('feedback-modal');
+        const endScreen = document.getElementById('end-screen');
+        const btnLeft = document.getElementById('btn-left');
+        const btnRight = document.getElementById('btn-right');
+        const btnJump = document.getElementById('btn-jump');
+
+        // Konstanta Canvas
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 400;
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+
+        // Input State
+        const keys = { left: false, right: false, up: false };
+
+        // Bind Keyboard
+        window.addEventListener('keydown', (e) => {
+            if(e.code === 'ArrowLeft') keys.left = true;
+            if(e.code === 'ArrowRight') keys.right = true;
+            if(e.code === 'ArrowUp' || e.code === 'Space') keys.up = true;
+        });
+        window.addEventListener('keyup', (e) => {
+            if(e.code === 'ArrowLeft') keys.left = false;
+            if(e.code === 'ArrowRight') keys.right = false;
+            if(e.code === 'ArrowUp' || e.code === 'Space') keys.up = false;
+        });
+
+        // Bind Touch Buttons
+        const bindTouch = (btn, key) => {
+            btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
+            btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+            btn.addEventListener('mousedown', (e) => { e.preventDefault(); keys[key] = true; });
+            btn.addEventListener('mouseup', (e) => { e.preventDefault(); keys[key] = false; });
+            btn.addEventListener('mouseleave', (e) => { e.preventDefault(); keys[key] = false; });
+        };
+        bindTouch(btnLeft, 'left');
+        bindTouch(btnRight, 'right');
+        bindTouch(btnJump, 'up');
+
+        // Entitas Game
+        let player, platforms, blocks, items;
+
+        function initLevel() {
+            const levelData = levels[currentLevel];
+            foodsCollected = 0;
+            
+            // Inisialisasi Player
+            player = {
+                x: 50, y: 300, w: 40, h: 40,
+                vx: 0, vy: 0,
+                speed: 4, jumpForce: -11, gravity: 0.5,
+                grounded: false,
+                facingRight: true,
+                emoji: levelData.animal
+            };
+
+            // Lantai Utama
+            platforms = [
+                { x: 0, y: 350, w: CANVAS_WIDTH, h: 50, type: 'ground' },
+                { x: 200, y: 260, w: 120, h: 20, type: 'platform' },
+                { x: 500, y: 200, w: 120, h: 20, type: 'platform' },
+                { x: 100, y: 150, w: 100, h: 20, type: 'platform' }
+            ];
+
+            // Bata
+            blocks = [
+                { x: 230, y: 150, w: 40, h: 40, type: 'point', active: true, bounceY: 0 },
+                { x: 270, y: 150, w: 40, h: 40, type: 'point', active: true, bounceY: 0 },
+                { x: 530, y: 100, w: 40, h: 40, type: 'point', active: true, bounceY: 0 },
+                // Bata tantangan muncul di area yang mudah diraih
+                { x: 650, y: 220, w: 40, h: 40, type: 'challenge', active: false, bounceY: 0 } // Active when food == 5
+            ];
+
+            // Makanan tersebar
+            items = [
+                { x: 150, y: 310, w: 30, h: 30, type: 'food', emoji: levelData.food, collected: false, baseY: 310, time: 0 },
+                { x: 250, y: 220, w: 30, h: 30, type: 'food', emoji: levelData.food, collected: false, baseY: 220, time: 1 },
+                { x: 550, y: 160, w: 30, h: 30, type: 'food', emoji: levelData.food, collected: false, baseY: 160, time: 2 },
+                { x: 140, y: 110, w: 30, h: 30, type: 'food', emoji: levelData.food, collected: false, baseY: 110, time: 3 },
+                { x: 700, y: 310, w: 30, h: 30, type: 'food', emoji: levelData.food, collected: false, baseY: 310, time: 4 }
+            ];
+            
+            updateGardenUI();
+            levelDisplay.innerText = currentLevel + 1;
+        }
+
+        // AABB Collision Detection
+        function checkCollision(r1, r2) {
+            return (r1.x < r2.x + r2.w &&
+                    r1.x + r1.w > r2.x &&
+                    r1.y < r2.y + r2.h &&
+                    r1.y + r1.h > r2.y);
+        }
+
+        function updatePhysics() {
+            // Horizontal Movement
+            if (keys.left) { player.vx = -player.speed; player.facingRight = false; }
+            else if (keys.right) { player.vx = player.speed; player.facingRight = true; }
+            else { player.vx = 0; }
+
+            player.x += player.vx;
+            
+            // Batas layar horizontal
+            if (player.x < 0) player.x = 0;
+            if (player.x + player.w > CANVAS_WIDTH) player.x = CANVAS_WIDTH - player.w;
+
+            // X Collisions dengan kotak (hanya cek jika menabrak sisi) - disederhanakan
+            
+            // Vertical Movement & Gravity
+            player.vy += player.gravity;
+            player.y += player.vy;
+            player.grounded = false;
+
+            // Cek collision platform & block
+            const allSolid = [...platforms, ...blocks];
+            for (let b of allSolid) {
+                if (checkCollision(player, b)) {
+                    // Nabrak dari atas (mendarat)
+                    if (player.vy > 0 && player.y + player.h - player.vy <= b.y + 10) {
+                        player.grounded = true;
+                        player.vy = 0;
+                        player.y = b.y - player.h;
+                    }
+                    // Nabrak dari bawah (sundul bata)
+                    else if (player.vy < 0 && player.y - player.vy >= b.y + b.h - 10) {
+                        player.vy = 0; // stop loncat
+                        player.y = b.y + b.h;
+                        
+                        // Logika Sundul Bata
+                        if (b.type === 'point' && b.active) {
+                            b.active = false;
+                            b.bounceY = -10; // Animasi mantul
+                            totalScore += 1;
+                            scoreDisplay.innerText = totalScore;
+                            createFloatingText("+1", b.x, b.y, "#facc15");
+                        } else if (b.type === 'challenge' && b.active) {
+                            b.bounceY = -10;
+                            // Trigger Pertanyaan
+                            setTimeout(showQuestionModal, 200);
+                            keys.left = keys.right = keys.up = false; // Reset input
+                            isGameRunning = false;
+                        }
+                    }
+                }
+            }
+
+            // Animasi bounce bata
+            blocks.forEach(b => {
+                if(b.bounceY < 0) b.bounceY += 1;
+            });
+
+            // Loncat
+            if (keys.up && player.grounded) {
+                player.vy = player.jumpForce;
+                player.grounded = false;
+            }
+
+            // Cek ambil makanan
+            items.forEach(item => {
+                if (!item.collected && checkCollision(player, item)) {
+                    item.collected = true;
+                    foodsCollected++;
+                    createFloatingText(item.emoji, item.x, item.y, "");
+                    
+                    // Jika cukup, aktifkan bata tantangan
+                    if (foodsCollected === 5) {
+                        const cb = blocks.find(b => b.type === 'challenge');
+                        if (cb) cb.active = true;
+                    }
+                }
+            });
+        }
+
+        let floatingTexts = [];
+        function createFloatingText(text, x, y, color) {
+            floatingTexts.push({ text, x, y, color, life: 30 });
+        }
+
+        function drawGame() {
+            // Background Clear (dikerjakan oleh CSS Canvas, tapi bersihkan layar)
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Draw Platforms
+            ctx.fillStyle = '#65a30d'; // Rumput/tanah
+            platforms.forEach(p => {
+                ctx.fillRect(p.x, p.y, p.w, p.h);
+                if(p.type === 'ground') {
+                    ctx.fillStyle = '#4d7c0f'; // tanah bawah
+                    ctx.fillRect(p.x, p.y+10, p.w, p.h-10);
+                    ctx.fillStyle = '#65a30d'; // reset
+                }
+            });
+
+            // Draw Blocks
+            blocks.forEach(b => {
+                let drawY = b.y + b.bounceY;
+                ctx.save();
+                ctx.shadowColor = 'rgba(0,0,0,0.3)';
+                ctx.shadowBlur = 5;
+                ctx.shadowOffsetY = 3;
+                
+                if (b.type === 'point') {
+                    if (b.active) {
+                        ctx.fillStyle = '#ca8a04'; // Bata kuning/coklat emas
+                        ctx.fillRect(b.x, drawY, b.w, b.h);
+                        // Icon koin/poin
+                        ctx.font = '20px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('💰', b.x + b.w/2, drawY + b.h/2);
+                    } else {
+                        ctx.fillStyle = '#78716c'; // Bata kosong (abu)
+                        ctx.fillRect(b.x, drawY, b.w, b.h);
+                    }
+                } else if (b.type === 'challenge') {
+                    if (b.active) {
+                        ctx.fillStyle = '#9333ea'; // Bata ungu bersinar
+                        ctx.fillRect(b.x, drawY, b.w, b.h);
+                        ctx.font = '24px sans-serif';
+                        ctx.fillStyle = 'white';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        ctx.fillText('❓', b.x + b.w/2, drawY + b.h/2);
+                        
+                        // Efek glow
+                        ctx.strokeStyle = '#d8b4fe';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(b.x-2, drawY-2, b.w+4, b.h+4);
+                    } else {
+                        ctx.fillStyle = '#a8a29e'; // Abu pudar (belum aktif)
+                        ctx.globalAlpha = 0.6;
+                        ctx.fillRect(b.x, drawY, b.w, b.h);
+                        ctx.globalAlpha = 1.0;
+                    }
+                }
+                
+                ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(b.x, drawY, b.w, b.h);
+                ctx.restore();
+            });
+
+            // Draw Items (Makanan)
+            ctx.font = '24px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            let time = Date.now() / 150;
+            items.forEach(item => {
+                if (!item.collected) {
+                    item.y = item.baseY + Math.sin(time + item.time) * 5; // Float efek
+                    ctx.fillText(item.emoji, item.x + item.w/2, item.y + item.h/2);
+                }
+            });
+
+            // Draw Player
+            ctx.save();
+            ctx.font = '36px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            if (!player.facingRight) {
+                // Flip canvas horizontal
+                ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
+                ctx.scale(-1, 1);
+                ctx.fillText(player.emoji, 0, 0);
+            } else {
+                ctx.fillText(player.emoji, player.x + player.w/2, player.y + player.h/2);
+            }
+            ctx.restore();
+
+            // Draw Floating Texts
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                let ft = floatingTexts[i];
+                ctx.font = '20px Fredoka, sans-serif';
+                ctx.fillStyle = ft.color || 'white';
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 3;
+                ctx.strokeText(ft.text, ft.x, ft.y);
+                ctx.fillText(ft.text, ft.x, ft.y);
+                ft.y -= 1;
+                ft.life -= 1;
+                if (ft.life <= 0) floatingTexts.splice(i, 1);
+            }
+
+            // Tampilkan Instruksi jika belum kumpul 5 makanan
+            ctx.font = '16px Fredoka, sans-serif';
+            ctx.fillStyle = 'rgba(0,0,0,0.7)';
+            ctx.textAlign = 'left';
+            ctx.fillText(`Kumpul Makanan: ${foodsCollected}/5`, 10, 20);
+            if(foodsCollected === 5) {
+                ctx.fillStyle = '#9333ea';
+                ctx.fillText(`Hebat! Sundul Bata Tantangan ❓!`, 10, 45);
+            }
+        }
+
+        function gameLoop() {
+            if (!isGameRunning) return;
+            updatePhysics();
+            drawGame();
+            animationId = requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            startScreen.classList.add('hidden');
+            currentLevel = 0;
+            totalScore = 0;
+            scoreDisplay.innerText = totalScore;
+            initLevel();
+            isGameRunning = true;
+            gameLoop();
+        }
+
+        function updateGardenUI() {
+            gardenProgress.innerHTML = '';
+            for (let i = 0; i < 10; i++) {
+                const pot = document.createElement('div');
+                pot.className = "text-2xl sm:text-3xl transition-transform duration-500";
+                
+                if (i < currentLevel) {
+                    // Sudah mekar
+                    pot.innerHTML = getFlowerEmoji(i);
+                    // Jika baru saja naik level, berikan animasi
+                    if (i === currentLevel - 1) {
+                        pot.classList.add('flower-bloom');
+                    }
+                } else if (i === currentLevel) {
+                    // Sedang dikerjakan
+                    pot.innerHTML = "🌱";
+                    pot.classList.add('animate-pulse');
+                } else {
+                    // Belum tercapai
+                    pot.innerHTML = "🟤"; // Tanah
+                    pot.style.opacity = '0.5';
+                }
+                gardenProgress.appendChild(pot);
+            }
+        }
+
+        function getFlowerEmoji(index) {
+            const flowers = ["🌷", "🌻", "🌺", "🌹", "🌼", "🌸", "🪴", "🌿", "🍀", "🌳"];
+            return flowers[index % flowers.length];
+        }
+
+        // --- SISTEM PERTANYAAN & MODAL ---
+
+        function showQuestionModal() {
+            const data = levels[currentLevel];
+            document.getElementById('question-text').innerText = data.question;
+            
+            optionsContainer.innerHTML = '';
+            
+            // Acak opsi jawaban (simpan indeks asli untuk verifikasi)
+            let ops = data.options.map((text, idx) => ({ text, isCorrect: idx === data.answer }));
+            ops = ops.sort(() => Math.random() - 0.5);
+
+            ops.forEach((opt, idx) => {
+                const btn = document.createElement('button');
+                btn.className = "w-full text-left bg-gray-50 hover:bg-purple-50 border-2 border-gray-200 hover:border-purple-400 p-4 rounded-xl text-gray-700 font-medium transition-all shadow-sm active:scale-95";
+                btn.innerHTML = `<span class="inline-block bg-white border border-gray-300 rounded-full w-8 h-8 text-center leading-8 mr-3 font-bold">${String.fromCharCode(65+idx)}</span> ${opt.text}`;
+                btn.onclick = () => checkAnswer(opt.isCorrect);
+                optionsContainer.appendChild(btn);
+            });
+
+            modalOverlay.classList.remove('hidden');
+            questionModal.classList.remove('hidden');
+            questionModal.classList.add('modal-enter');
+        }
+
+        function closeQuestionModal() {
+            modalOverlay.classList.add('hidden');
+            questionModal.classList.add('hidden');
+            questionModal.classList.remove('modal-enter');
+        }
+
+        function checkAnswer(isCorrect) {
+            closeQuestionModal();
+            
+            const data = levels[currentLevel];
+            const title = document.getElementById('feedback-title');
+            const text = document.getElementById('feedback-text');
+            const icon = document.getElementById('feedback-icon');
+            const btn = document.getElementById('feedback-btn');
+
+            if (isCorrect) {
+                // Jawaban Benar
+                icon.innerText = "🌟";
+                title.innerText = "Wah, Hebat!";
+                title.className = "text-2xl font-bold mb-2 text-green-600";
+                text.innerText = "Jawabanmu benar! Lihat, satu benih keajaiban berhasil tumbuh di kebunmu!";
+                btn.innerText = "Lanjut Berpetualang!";
+                btn.className = "btn-game text-white text-lg font-bold py-3 px-6 rounded-full shadow-[0_4px_0_#15803d] bg-green-500 hover:bg-green-600 w-full mt-4";
+                
+                btn.onclick = () => {
+                    closeFeedbackModal();
+                    levelUp();
+                };
+            } else {
+                // Jawaban Salah
+                icon.innerText = "💡";
+                title.innerText = "Ups, Hampir Tepat!";
+                title.className = "text-2xl font-bold mb-2 text-orange-500";
+                text.innerHTML = `Yuk, coba perhatikan lagi.<br><br><span class="text-sm bg-orange-100 p-2 rounded block border border-orange-200"><strong>Petunjuk:</strong> ${data.hint}</span>`;
+                btn.innerText = "Coba Lagi!";
+                btn.className = "btn-game text-white text-lg font-bold py-3 px-6 rounded-full shadow-[0_4px_0_#c2410c] bg-orange-500 hover:bg-orange-600 w-full mt-4";
+                
+                btn.onclick = () => {
+                    closeFeedbackModal();
+                    // Biarkan pemain memukul blok lagi (reset posisi blok ke active)
+                    const cb = blocks.find(b => b.type === 'challenge');
+                    if(cb) {
+                        cb.active = true;
+                        cb.bounceY = 0;
+                    }
+                    // Resume game
+                    isGameRunning = true;
+                    gameLoop();
+                };
+            }
+
+            modalOverlay.classList.remove('hidden');
+            feedbackModal.classList.remove('hidden');
+            feedbackModal.classList.add('modal-enter');
+        }
+
+        function closeFeedbackModal() {
+            modalOverlay.classList.add('hidden');
+            feedbackModal.classList.add('hidden');
+            feedbackModal.classList.remove('modal-enter');
+        }
+
+        function levelUp() {
+            currentLevel++;
+            if (currentLevel >= levels.length) {
+                // Tamat
+                updateGardenUI();
+                showEndScreen();
+            } else {
+                // Lanjut level berikutnya
+                initLevel();
+                isGameRunning = true;
+                gameLoop();
+            }
+        }
+
+        function showEndScreen() {
+            endScreen.classList.remove('hidden');
+            endScreen.classList.add('modal-enter');
+            // Sedikit confetti effect (simulasi sederhana di canvas background layar akhir)
+        }
+
+        // Gambar awal static
+        initLevel();
+        drawGame();
+
+    </script>
+</body>
+</html>
